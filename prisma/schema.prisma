@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Person {
+  id           String       @id @default(cuid())
+  name         String
+  rollNumber   String       @unique
+  department   String
+  className    String
+  role         String       @default("student") // student | staff
+  thumbnail    String? // small base64 data URL for UI confirmation
+  embeddings   String // AES-GCM encrypted JSON array of Float32Array descriptors
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  attendances  Attendance[]
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  markedAt  DateTime @default(now())
+  method    String   @default("face") // face | manual
+  confidence Float?
+  livenessPassed Boolean @default(true)
+  note      String?
+
+  @@index([markedAt])
+  @@index([personId, markedAt])
+}
+
+model RecognitionAttempt {
+  id        String   @id @default(cuid())
+  success   Boolean
+  reason    String?
+  distance  Float?
+  ipHint    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Settings {
+  id             String @id @default("default")
+  collegeName    String @default("Kips College G-9")
+  matchThreshold Float  @default(0.5)
+  cameraFacing   String @default("user")
+  requireLiveness Boolean @default(true)
+  darkModeDefault Boolean @default(false)
+}
