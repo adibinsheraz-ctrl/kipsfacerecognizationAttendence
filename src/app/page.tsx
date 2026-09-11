@@ -21,7 +21,11 @@ export default function HomePage() {
         <main className="flex flex-1 flex-col justify-center py-16">
           <div className="max-w-2xl animate-rise" style={{ animationDelay: "80ms" }}>
             <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-[var(--ink)] sm:text-6xl md:text-7xl">
-              Kips College G-9
+              <span>Kips College</span>
+              <br className="sm:hidden" />
+              <span className="block sm:inline pl-6 sm:pl-0 mt-1 sm:mt-0 text-[var(--accent)] sm:text-inherit">
+                {" "}G-9
+              </span>
             </h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-[var(--muted)]">
               Walk up. Look at the camera. Marked present with live face

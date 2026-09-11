@@ -16,30 +16,69 @@ model Admin {
   updatedAt    DateTime @updatedAt
 }
 
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  courses   Course[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Course {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String
+  classes      Class[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+}
+
+model Class {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  name      String
+  people    Person[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseId, name])
+  @@index([courseId])
+}
+
 model Person {
   id           String       @id @default(cuid())
   name         String
   rollNumber   String       @unique
-  department   String
-  className    String
+  department   String       @default("") // cached / fallback department name
+  className    String       @default("") // cached / fallback class name
+  classId      String?
+  class        Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
   role         String       @default("student") // student | staff
-  thumbnail    String? // small base64 data URL for UI confirmation
-  embeddings   String // AES-GCM encrypted JSON array of Float32Array descriptors
+  thumbnail    String?      // low-quality reference photo (display only)
+  embeddings   String       // AES-GCM encrypted JSON array of Float32Array descriptors
   active       Boolean      @default(true)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   attendances  Attendance[]
+
+  @@index([classId])
 }
 
 model Attendance {
-  id        String   @id @default(cuid())
-  personId  String
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  markedAt  DateTime @default(now())
-  method    String   @default("face") // face | manual
-  confidence Float?
-  livenessPassed Boolean @default(true)
-  note      String?
+  id             String   @id @default(cuid())
+  personId       String
+  person         Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  markedAt       DateTime @default(now())
+  status         String   @default("present") // present | late | absent
+  method         String   @default("face")    // face | manual
+  confidence     Float?
+  livenessPassed Boolean  @default(true)
+  note           String?
 
   @@index([markedAt])
   @@index([personId, markedAt])

@@ -331,6 +331,11 @@ export function descriptorToArray(descriptor: Float32Array | number[]): number[]
   return Array.from(descriptor);
 }
 
+/**
+ * Display-only low-quality reference photo capture.
+ * Never used for face recognition matching (only encrypted 128-d vectors are used).
+ * Aggressively downscaled to 160x160 and compressed to WebP/JPEG (~3-5 KB) to conserve database storage.
+ */
 export function captureThumbnail(video: HTMLVideoElement, size = 160): string {
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -341,5 +346,44 @@ export function captureThumbnail(video: HTMLVideoElement, size = 160): string {
   const sx = (video.videoWidth - min) / 2;
   const sy = (video.videoHeight - min) / 2;
   ctx.drawImage(video, sx, sy, min, min, 0, 0, size, size);
-  return canvas.toDataURL("image/jpeg", 0.7);
+  try {
+    const webp = canvas.toDataURL("image/webp", 0.65);
+    if (webp.startsWith("data:image/webp")) return webp;
+  } catch {
+    // Fallback to jpeg if webp unsupported
+  }
+  return canvas.toDataURL("image/jpeg", 0.65);
+}
+
+/**
+ * Compresses an uploaded image file down to a lightweight 160x160 display-only thumbnail.
+ */
+export function compressImageFile(file: File, size = 160): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      try {
+        const webp = canvas.toDataURL("image/webp", 0.65);
+        if (webp.startsWith("data:image/webp")) {
+          resolve(webp);
+          return;
+        }
+      } catch {}
+      resolve(canvas.toDataURL("image/jpeg", 0.65));
+    };
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = URL.createObjectURL(file);
+  });
 }

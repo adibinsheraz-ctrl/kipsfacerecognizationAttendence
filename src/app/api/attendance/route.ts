@@ -27,14 +27,18 @@ export async function GET(req: Request) {
         : {}),
       ...(personId ? { personId } : {}),
       person: {
-        ...(department ? { department } : {}),
-        ...(className ? { className } : {}),
-        ...(q
+        ...(department ? { department: { contains: department, mode: "insensitive" as const } } : {}),
+        ...(className ? { className: { contains: className, mode: "insensitive" as const } } : {}),
+        ...(q && q.trim().split(/\s+/).filter(Boolean).length > 0
           ? {
-              OR: [
-                { name: { contains: q } },
-                { rollNumber: { contains: q } },
-              ],
+              AND: q.trim().split(/\s+/).filter(Boolean).map((token) => ({
+                OR: [
+                  { name: { contains: token, mode: "insensitive" as const } },
+                  { rollNumber: { contains: token, mode: "insensitive" as const } },
+                  { department: { contains: token, mode: "insensitive" as const } },
+                  { className: { contains: token, mode: "insensitive" as const } },
+                ],
+              })),
             }
           : {}),
       },

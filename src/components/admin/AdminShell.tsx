@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  GraduationCap,
   ClipboardList,
   Settings,
   LogOut,
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
+  { href: "/admin/classes", label: "Classes & Depts", icon: GraduationCap },
   { href: "/admin/people", label: "People", icon: Users },
   { href: "/admin/attendance", label: "Attendance", icon: ClipboardList },
   { href: "/admin/settings", label: "Settings", icon: Settings },

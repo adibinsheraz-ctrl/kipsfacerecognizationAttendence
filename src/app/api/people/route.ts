@@ -8,8 +8,9 @@ import { invalidateEmbeddingCache } from "@/lib/embedding-cache";
 const createSchema = z.object({
   name: z.string().min(2).max(100),
   rollNumber: z.string().min(1).max(50),
-  department: z.string().min(1).max(100),
-  className: z.string().min(1).max(100),
+  department: z.string().min(1).max(100).optional(),
+  className: z.string().min(1).max(100).optional(),
+  classId: z.string().optional().nullable(),
   role: z.enum(["student", "staff"]).default("student"),
   thumbnail: z.string().optional().nullable(),
   descriptors: z.array(z.array(z.number())).min(3).max(8),
@@ -22,18 +23,27 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   const active = searchParams.get("active");
+  const classId = searchParams.get("classId");
+  const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
 
   const people = await prisma.person.findMany({
     where: {
       ...(active === "true" ? { active: true } : active === "false" ? { active: false } : {}),
-      ...(q
+      ...(classId ? { classId } : {}),
+      ...(tokens.length > 0
         ? {
-            OR: [
-              { name: { contains: q } },
-              { rollNumber: { contains: q } },
-              { department: { contains: q } },
-              { className: { contains: q } },
-            ],
+            AND: tokens.map((token) => ({
+              OR: [
+                { name: { contains: token, mode: "insensitive" as const } },
+                { rollNumber: { contains: token, mode: "insensitive" as const } },
+                { department: { contains: token, mode: "insensitive" as const } },
+                { className: { contains: token, mode: "insensitive" as const } },
+                { role: { contains: token, mode: "insensitive" as const } },
+                { class: { name: { contains: token, mode: "insensitive" as const } } },
+                { class: { course: { name: { contains: token, mode: "insensitive" as const } } } },
+                { class: { course: { department: { name: { contains: token, mode: "insensitive" as const } } } } },
+              ],
+            })),
           }
         : {}),
     },
@@ -44,6 +54,25 @@ export async function GET(req: Request) {
       rollNumber: true,
       department: true,
       className: true,
+      classId: true,
+      class: {
+        select: {
+          id: true,
+          name: true,
+          course: {
+            select: {
+              id: true,
+              name: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
       role: true,
       thumbnail: true,
       active: true,
@@ -68,12 +97,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Roll number already enrolled" }, { status: 409 });
     }
 
+    let classId = body.classId || null;
+    let resolvedClassName = body.className || "";
+    let resolvedDepartment = body.department || "";
+
+    if (classId) {
+      const cls = await prisma.class.findUnique({
+        where: { id: classId },
+        include: { course: { include: { department: true } } },
+      });
+      if (cls) {
+        resolvedClassName = cls.name;
+        resolvedDepartment = cls.course.department.name;
+      }
+    } else if (resolvedClassName) {
+      const cls = await prisma.class.findFirst({
+        where: { name: resolvedClassName },
+        include: { course: { include: { department: true } } },
+      });
+      if (cls) {
+        classId = cls.id;
+        resolvedDepartment = cls.course.department.name;
+      }
+    }
+
     const person = await prisma.person.create({
       data: {
         name: body.name,
         rollNumber: body.rollNumber,
-        department: body.department,
-        className: body.className,
+        department: resolvedDepartment,
+        className: resolvedClassName,
+        classId,
         role: body.role,
         thumbnail: body.thumbnail || null,
         embeddings: encryptEmbeddings(body.descriptors),
@@ -84,6 +138,7 @@ export async function POST(req: Request) {
         rollNumber: true,
         department: true,
         className: true,
+        classId: true,
         role: true,
         thumbnail: true,
         active: true,

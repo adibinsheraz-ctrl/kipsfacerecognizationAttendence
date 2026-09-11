@@ -9,6 +9,7 @@ const updateSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   department: z.string().min(1).max(100).optional(),
   className: z.string().min(1).max(100).optional(),
+  classId: z.string().optional().nullable(),
   role: z.enum(["student", "staff"]).optional(),
   active: z.boolean().optional(),
   thumbnail: z.string().optional().nullable(),
@@ -30,6 +31,25 @@ export async function GET(_req: Request, ctx: Ctx) {
       rollNumber: true,
       department: true,
       className: true,
+      classId: true,
+      class: {
+        select: {
+          id: true,
+          name: true,
+          course: {
+            select: {
+              id: true,
+              name: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
       role: true,
       thumbnail: true,
       active: true,
@@ -49,12 +69,32 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const body = updateSchema.parse(await req.json());
+
+    let resolvedClassName = body.className;
+    let resolvedDepartment = body.department;
+
+    if (body.classId !== undefined) {
+      if (body.classId) {
+        const cls = await prisma.class.findUnique({
+          where: { id: body.classId },
+          include: { course: { include: { department: true } } },
+        });
+        if (cls) {
+          resolvedClassName = cls.name;
+          resolvedDepartment = cls.course.department.name;
+        }
+      } else {
+        // Unlinked from class
+      }
+    }
+
     const person = await prisma.person.update({
       where: { id },
       data: {
         ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.department !== undefined ? { department: body.department } : {}),
-        ...(body.className !== undefined ? { className: body.className } : {}),
+        ...(resolvedDepartment !== undefined ? { department: resolvedDepartment } : {}),
+        ...(resolvedClassName !== undefined ? { className: resolvedClassName } : {}),
+        ...(body.classId !== undefined ? { classId: body.classId } : {}),
         ...(body.role !== undefined ? { role: body.role } : {}),
         ...(body.active !== undefined ? { active: body.active } : {}),
         ...(body.thumbnail !== undefined ? { thumbnail: body.thumbnail } : {}),
@@ -66,6 +106,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         rollNumber: true,
         department: true,
         className: true,
+        classId: true,
         role: true,
         thumbnail: true,
         active: true,
@@ -87,10 +128,16 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  await prisma.person.update({
-    where: { id },
-    data: { active: false },
-  });
-  invalidateEmbeddingCache();
-  return NextResponse.json({ ok: true });
+  try {
+    // Cascade delete is configured on Attendance (onDelete: Cascade),
+    // so deleting the person also permanently deletes all their attendance records.
+    await prisma.person.delete({
+      where: { id },
+    });
+    invalidateEmbeddingCache();
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to permanently delete person:", error);
+    return NextResponse.json({ error: "Failed to delete person" }, { status: 500 });
+  }
 }
