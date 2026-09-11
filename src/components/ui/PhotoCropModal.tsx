@@ -20,27 +20,37 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [scale, setScale] = useState(1);
+  // Base scale is computed on load so the full image is comfortably visible and slightly zoomed out
+  const [baseScale, setBaseScale] = useState(1);
+  // Zoom factor multiplier relative to baseScale (1.0 = full-context view)
+  const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const offsetStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Load the image when imageSrc changes
+  // Load image and compute baseline scale
   useEffect(() => {
     if (!open || !imageSrc) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       setImage(img);
-      // Fit image initially so the smallest dimension fills the circular crop area
-      const minDimension = Math.min(img.naturalWidth, img.naturalHeight);
-      const initialScale = Math.max((CIRCLE_RADIUS * 2) / minDimension, 1);
-      setScale(initialScale);
+      // Fit the image so that the largest dimension comfortably fits within ~88% of the circle diameter
+      // This ensures the photo is slightly zoomed out on initial load, keeping its original aspect ratio
+      // and allowing the admin to see the full context (head, shoulders, background) before adjusting.
+      const maxDimension = Math.max(img.naturalWidth, img.naturalHeight);
+      const targetSize = CIRCLE_RADIUS * 2 * 0.88;
+      const initialBase = targetSize / maxDimension;
+      setBaseScale(initialBase);
+      setZoom(1);
       setOffset({ x: 0, y: 0 });
     };
     img.src = imageSrc;
   }, [open, imageSrc]);
+
+  // Current effective scale
+  const currentScale = baseScale * zoom;
 
   // Render main interactive canvas
   const drawMainCanvas = useCallback(() => {
@@ -51,19 +61,19 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
 
     ctx.clearRect(0, 0, VIEW_SIZE, VIEW_SIZE);
 
-    // Draw background grid/darkness
-    ctx.fillStyle = "#111827";
+    // Dark canvas background
+    ctx.fillStyle = "#0f172a";
     ctx.fillRect(0, 0, VIEW_SIZE, VIEW_SIZE);
 
-    // Draw the image centered at offset
+    // Draw the image centered with offset
     const centerX = VIEW_SIZE / 2 + offset.x;
     const centerY = VIEW_SIZE / 2 + offset.y;
-    const w = image.naturalWidth * scale;
-    const h = image.naturalHeight * scale;
+    const w = image.naturalWidth * currentScale;
+    const h = image.naturalHeight * currentScale;
 
     ctx.drawImage(image, centerX - w / 2, centerY - h / 2, w, h);
 
-    // Draw dark vignette overlay outside circular crop area
+    // Draw translucent vignette overlay outside circular crop area
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, VIEW_SIZE, VIEW_SIZE);
@@ -72,15 +82,15 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
     ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
     ctx.fill();
 
-    // Draw circular guideline border
+    // Circular guideline border
     ctx.beginPath();
     ctx.arc(VIEW_SIZE / 2, VIEW_SIZE / 2, CIRCLE_RADIUS, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Subtle crosshairs in center
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    // Center alignment crosshairs
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(VIEW_SIZE / 2 - 8, VIEW_SIZE / 2);
@@ -90,9 +100,9 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
     ctx.stroke();
 
     ctx.restore();
-  }, [image, scale, offset]);
+  }, [image, currentScale, offset]);
 
-  // Render small live preview circle
+  // Render live circular preview
   const drawPreviewCanvas = useCallback(() => {
     const preview = previewCanvasRef.current;
     if (!preview || !image) return;
@@ -101,27 +111,29 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
 
     ctx.clearRect(0, 0, 64, 64);
 
-    // Source coordinates in the main image corresponding to the circular crop area
-    const scaleFactor = (CIRCLE_RADIUS * 2) / (VIEW_SIZE * scale);
-    const sourceW = (CIRCLE_RADIUS * 2) / scale;
-    const sourceH = (CIRCLE_RADIUS * 2) / scale;
-    const sourceX = image.naturalWidth / 2 - offset.x / scale - sourceW / 2;
-    const sourceY = image.naturalHeight / 2 - offset.y / scale - sourceH / 2;
-
     ctx.save();
     ctx.beginPath();
     ctx.arc(32, 32, 32, 0, Math.PI * 2);
     ctx.clip();
-    ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, 64, 64);
+
+    // Scale factor from circular viewport to 64px preview
+    const previewFactor = 64 / (CIRCLE_RADIUS * 2);
+    ctx.translate(32, 32);
+    ctx.translate(offset.x * previewFactor, offset.y * previewFactor);
+
+    const renderW = image.naturalWidth * currentScale * previewFactor;
+    const renderH = image.naturalHeight * currentScale * previewFactor;
+    ctx.drawImage(image, -renderW / 2, -renderH / 2, renderW, renderH);
+
     ctx.restore();
-  }, [image, scale, offset]);
+  }, [image, currentScale, offset]);
 
   useEffect(() => {
     drawMainCanvas();
     drawPreviewCanvas();
   }, [drawMainCanvas, drawPreviewCanvas]);
 
-  // Drag handling (mouse)
+  // Mouse drag handling
   function handleMouseDown(e: MouseEvent) {
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
@@ -142,7 +154,7 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
     setIsDragging(false);
   }
 
-  // Drag handling (touch for tablet/mobile)
+  // Touch drag handling (tablet / mobile)
   function handleTouchStart(e: TouchEvent) {
     if (e.touches.length === 1) {
       setIsDragging(true);
@@ -169,46 +181,42 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
   function handleWheel(e: WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.08 : -0.08;
-    setScale((s) => Math.min(Math.max(s + delta, 0.3), 4));
+    setZoom((z) => Math.min(Math.max(z + delta, 0.5), 3.5));
   }
 
+  // Reset to initial full-context view
   function handleReset() {
-    if (!image) return;
-    const minDimension = Math.min(image.naturalWidth, image.naturalHeight);
-    const initialScale = Math.max((CIRCLE_RADIUS * 2) / minDimension, 1);
-    setScale(initialScale);
+    setZoom(1);
     setOffset({ x: 0, y: 0 });
   }
 
   function handleCropConfirm() {
     if (!image) return;
 
-    // Create offscreen canvas for final output
+    // Create high-res offscreen canvas for final export
     const outputCanvas = document.createElement("canvas");
     outputCanvas.width = OUTPUT_SIZE;
     outputCanvas.height = OUTPUT_SIZE;
     const ctx = outputCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Source coordinates in the image corresponding to the circular crop area
-    const sourceW = (CIRCLE_RADIUS * 2) / scale;
-    const sourceH = (CIRCLE_RADIUS * 2) / scale;
-    const sourceX = image.naturalWidth / 2 - offset.x / scale - sourceW / 2;
-    const sourceY = image.naturalHeight / 2 - offset.y / scale - sourceH / 2;
+    // Clean neutral background in case image is smaller than crop
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-    ctx.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      sourceW,
-      sourceH,
-      0,
-      0,
-      OUTPUT_SIZE,
-      OUTPUT_SIZE
-    );
+    // Scale factor from CIRCLE_RADIUS*2 (240px) to OUTPUT_SIZE (256px)
+    const outputFactor = OUTPUT_SIZE / (CIRCLE_RADIUS * 2);
 
-    // Export as high-quality compressed WebP (or JPEG fallback)
+    ctx.save();
+    ctx.translate(OUTPUT_SIZE / 2, OUTPUT_SIZE / 2);
+    ctx.translate(offset.x * outputFactor, offset.y * outputFactor);
+
+    const renderW = image.naturalWidth * currentScale * outputFactor;
+    const renderH = image.naturalHeight * currentScale * outputFactor;
+    ctx.drawImage(image, -renderW / 2, -renderH / 2, renderW, renderH);
+    ctx.restore();
+
+    // Export as high-efficiency WebP (with fallback)
     const dataUrl = outputCanvas.toDataURL("image/webp", 0.85);
     onSave(dataUrl);
   }
@@ -253,7 +261,7 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
           </div>
 
           <p className="mt-2 text-xs text-[var(--muted)]">
-            Drag to center face • Zoom in or out • Position inside the circle
+            Full photo is shown slightly zoomed out for context • Drag to center • Zoom in/out to adjust
           </p>
 
           {/* Interactive Crop Viewport */}
@@ -277,7 +285,7 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
                 className="block"
               />
               <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-xs flex items-center gap-1">
-                <Move size={10} /> Drag to position
+                <Move size={10} /> Drag to center face
               </div>
             </div>
 
@@ -287,7 +295,7 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
               <div className="flex items-center gap-2 flex-1">
                 <button
                   type="button"
-                  onClick={() => setScale((s) => Math.max(s - 0.1, 0.3))}
+                  onClick={() => setZoom((z) => Math.max(z - 0.1, 0.5))}
                   className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-muted)]/60 p-1.5 text-[var(--ink)] hover:bg-[var(--surface-muted)]"
                   title="Zoom Out"
                 >
@@ -296,18 +304,18 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
 
                 <input
                   type="range"
-                  min="0.4"
+                  min="0.5"
                   max="3.5"
                   step="0.05"
-                  value={scale}
-                  onChange={(e) => setScale(parseFloat(e.target.value))}
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
                   className="h-1.5 flex-1 cursor-pointer accent-[var(--accent)]"
-                  title="Zoom"
+                  title={`Zoom: ${Math.round(zoom * 100)}%`}
                 />
 
                 <button
                   type="button"
-                  onClick={() => setScale((s) => Math.min(s + 0.1, 4))}
+                  onClick={() => setZoom((z) => Math.min(z + 0.1, 3.5))}
                   className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-muted)]/60 p-1.5 text-[var(--ink)] hover:bg-[var(--surface-muted)]"
                   title="Zoom In"
                 >
@@ -320,7 +328,7 @@ export function PhotoCropModal({ open, imageSrc, onSave, onCancel }: Props) {
                 type="button"
                 onClick={handleReset}
                 className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface-muted)]/60 px-2.5 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-                title="Reset to center"
+                title="Reset zoom & center"
               >
                 <RotateCcw size={12} />
                 Center
