@@ -3,9 +3,6 @@ import { requireAdmin } from "@/lib/auth";
 import { AdminShell } from "@/components/admin/AdminShell";
 import FirebaseAnalyticsProvider from "@/components/FirebaseAnalyticsProvider";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export default async function AdminPanelLayout({
   children,
 }: {

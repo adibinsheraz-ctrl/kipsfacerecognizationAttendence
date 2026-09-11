@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 import { Button, Card, Skeleton } from "@/components/ui/primitives";
+import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 type Stats = {
   overview: {
@@ -34,14 +35,35 @@ type Stats = {
   trend: Array<{ date: string; count: number }>;
 };
 
+type SecurityLogItem = {
+  id: string;
+  type: string;
+  ip: string;
+  email: string | null;
+  details: string | null;
+  createdAt: string;
+};
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [securityLogs, setSecurityLogs] = useState<SecurityLogItem[]>([]);
+  const [failedLogins24h, setFailedLogins24h] = useState(0);
 
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => r.json())
       .then(setStats)
       .catch(() => setStats(null));
+
+    fetch("/api/security/logs")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.logs) {
+          setSecurityLogs(d.logs);
+          setFailedLogins24h(d.failedCount24h || 0);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   if (!stats) {
@@ -63,16 +85,25 @@ export default function AdminDashboardPage() {
       label: "Today's attendance",
       value: `${stats.overview.attendanceRate}%`,
       hint: `${stats.overview.presentToday} of ${stats.overview.enrolled} enrolled`,
+      danger: false,
     },
     {
       label: "Enrolled people",
       value: String(stats.overview.enrolled),
       hint: "Active face profiles",
+      danger: false,
     },
     {
       label: "Failed scans today",
       value: String(stats.overview.failedAttemptsToday),
       hint: "Possible spoof or mismatch",
+      danger: false,
+    },
+    {
+      label: "Failed logins (24h)",
+      value: String(failedLogins24h),
+      hint: failedLogins24h > 0 ? "Suspicious attempts detected" : "No threat activity",
+      danger: failedLogins24h > 0,
     },
   ];
 
@@ -97,11 +128,15 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
           <Card key={c.label} className="p-5">
             <p className="text-sm text-[var(--muted)]">{c.label}</p>
-            <p className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
+            <p
+              className={`mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight ${
+                c.danger ? "text-[var(--danger)]" : ""
+              }`}
+            >
               {c.value}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">{c.hint}</p>
@@ -178,6 +213,73 @@ export default function AdminDashboardPage() {
           </ul>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-[var(--accent)]" />
+            <h2 className="font-medium">Security & Authentication Audit</h2>
+          </div>
+          <span className="text-xs text-[var(--muted)]">
+            Live brute-force & login telemetry
+          </span>
+        </div>
+
+        {securityLogs.length === 0 ? (
+          <p className="mt-4 text-sm text-[var(--muted)]">
+            No authentication events recorded yet.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[var(--muted)]">
+                  <th className="pb-2 font-medium">Timestamp</th>
+                  <th className="pb-2 font-medium">Event</th>
+                  <th className="pb-2 font-medium">IP Address</th>
+                  <th className="pb-2 font-medium">Account / Email</th>
+                  <th className="pb-2 font-medium">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {securityLogs.slice(0, 10).map((log) => {
+                  const isSuccess = log.type === "login_success";
+                  const isLocked = log.type === "account_locked";
+                  return (
+                    <tr key={log.id} className="hover:bg-[var(--surface-hover)]">
+                      <td className="py-2.5 text-[var(--muted)]">
+                        {format(new Date(log.createdAt), "MMM d, HH:mm:ss")}
+                      </td>
+                      <td className="py-2.5">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            isSuccess
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : isLocked
+                              ? "bg-red-500/15 text-red-600 dark:text-red-400 font-semibold"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {log.type.replace(/_/g, " ").toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-2.5 font-mono text-[var(--muted)]">
+                        {log.ip}
+                      </td>
+                      <td className="py-2.5 text-[var(--ink)]">
+                        {log.email || "—"}
+                      </td>
+                      <td className="py-2.5 text-[var(--muted)]">
+                        {log.details || "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

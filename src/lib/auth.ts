@@ -10,14 +10,30 @@ import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 
-const COOKIE = "kips_admin_session";
+export const SESSION_COOKIE_NAME = "kips_admin_session";
 const MAX_AGE = 60 * 60 * 8; // 8 hours
 
-function secret() {
+export function secret() {
   return new TextEncoder().encode(
     process.env.JWT_SECRET || "kips-dev-jwt-secret-change-me"
   );
 }
+
+export async function verifySessionToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.role !== "admin" || !payload.sub) return null;
+    return {
+      id: payload.sub as string,
+      email: payload.email as string,
+      name: payload.name as string,
+      role: "admin" as const,
+    };
+  } catch {
+    return null;
+  }
+}
+
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
@@ -40,7 +56,7 @@ export async function createSession(admin: { id: string; email: string; name: st
     .sign(secret());
 
   const jar = await cookies();
-  jar.set(COOKIE, token, {
+  jar.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -53,32 +69,14 @@ export async function createSession(admin: { id: string; email: string; name: st
 
 export async function destroySession() {
   const jar = await cookies();
-  jar.set(COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-  });
+  jar.set(SESSION_COOKIE_NAME, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
 export async function getSession() {
   const jar = await cookies();
-  const token = jar.get(COOKIE)?.value;
+  const token = jar.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, secret());
-    if (payload.role !== "admin" || !payload.sub) return null;
-    return {
-      id: payload.sub as string,
-      email: payload.email as string,
-      name: payload.name as string,
-      role: "admin" as const,
-    };
-  } catch {
-    return null;
-  }
+  return verifySessionToken(token);
 }
 
 export async function requireAdmin() {

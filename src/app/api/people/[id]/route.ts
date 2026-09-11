@@ -5,15 +5,17 @@ import { requireAdmin } from "@/lib/auth";
 import { encryptEmbeddings } from "@/lib/crypto";
 import { invalidateEmbeddingCache } from "@/lib/embedding-cache";
 
+import { sanitizeText, thumbnailSchema, descriptorsArraySchema } from "@/lib/sanitize";
+
 const updateSchema = z.object({
-  name: z.string().min(2).max(100).optional(),
-  department: z.string().min(1).max(100).optional(),
-  className: z.string().min(1).max(100).optional(),
+  name: z.string().min(2).max(100).optional().transform((v) => (v ? sanitizeText(v) : undefined)),
+  department: z.string().min(1).max(100).optional().transform((v) => (v ? sanitizeText(v) : undefined)),
+  className: z.string().min(1).max(100).optional().transform((v) => (v ? sanitizeText(v) : undefined)),
   classId: z.string().optional().nullable(),
   role: z.enum(["student", "staff"]).optional(),
   active: z.boolean().optional(),
-  thumbnail: z.string().optional().nullable(),
-  descriptors: z.array(z.array(z.number())).min(3).max(8).optional(),
+  thumbnail: thumbnailSchema,
+  descriptors: descriptorsArraySchema.optional(),
 });
 
 type Ctx = { params: Promise<{ id: string }> };

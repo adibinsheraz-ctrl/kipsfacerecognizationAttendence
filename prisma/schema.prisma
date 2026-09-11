@@ -103,3 +103,16 @@ model Settings {
   requireLiveness Boolean @default(true)
   darkModeDefault Boolean @default(false)
 }
+
+model SecurityLog {
+  id        String   @id @default(cuid())
+  type      String   // "login_success" | "login_failed" | "account_locked" | "unauthorized_access"
+  ip        String
+  email     String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([ip])
+}
+

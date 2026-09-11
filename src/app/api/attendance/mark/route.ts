@@ -4,14 +4,21 @@ import { startOfDay, endOfDay } from "date-fns";
 import { prisma } from "@/lib/db";
 import { getMatchCandidates } from "@/lib/embedding-cache";
 import { checkRateLimit, findBestMatch } from "@/lib/face-match";
+import { requireAdmin } from "@/lib/auth";
 
 const schema = z.object({
-  descriptor: z.array(z.number()).min(100),
+  descriptor: z.array(z.number().finite()).length(128),
   livenessPassed: z.boolean(),
 });
 
 export async function POST(req: Request) {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized: Admin or kiosk session required" }, { status: 401 });
+  }
+
   const started = Date.now();
+
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||

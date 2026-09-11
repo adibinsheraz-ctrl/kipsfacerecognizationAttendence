@@ -5,15 +5,17 @@ import { requireAdmin } from "@/lib/auth";
 import { encryptEmbeddings } from "@/lib/crypto";
 import { invalidateEmbeddingCache } from "@/lib/embedding-cache";
 
+import { sanitizeText, thumbnailSchema, descriptorsArraySchema } from "@/lib/sanitize";
+
 const createSchema = z.object({
-  name: z.string().min(2).max(100),
-  rollNumber: z.string().min(1).max(50),
-  department: z.string().min(1).max(100).optional(),
-  className: z.string().min(1).max(100).optional(),
+  name: z.string().min(2).max(100).transform(sanitizeText),
+  rollNumber: z.string().min(1).max(50).transform(sanitizeText),
+  department: z.string().min(1).max(100).optional().transform((v) => (v ? sanitizeText(v) : undefined)),
+  className: z.string().min(1).max(100).optional().transform((v) => (v ? sanitizeText(v) : undefined)),
   classId: z.string().optional().nullable(),
   role: z.enum(["student", "staff"]).default("student"),
-  thumbnail: z.string().optional().nullable(),
-  descriptors: z.array(z.array(z.number())).min(3).max(8),
+  thumbnail: thumbnailSchema,
+  descriptors: descriptorsArraySchema,
 });
 
 export async function GET(req: Request) {
