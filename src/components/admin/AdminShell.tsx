@@ -88,6 +88,23 @@ export function AdminShell({
               Sign out
             </button>
             <p className="px-3 pt-1 text-xs text-[var(--muted)]">{adminName}</p>
+            <div className="px-3 pt-3 pb-1 border-t border-[var(--border)] mt-2">
+              <p className="text-[10px] leading-relaxed text-[var(--muted)] opacity-70">
+                &copy; {new Date().getFullYear()} Kips College G-9
+              </p>
+              <p className="text-[10px] text-[var(--muted)] opacity-70">
+                Built by{" "}
+                <a
+                  href="mailto:adi.binsheraz@gmail.com"
+                  className="underline underline-offset-2 hover:opacity-100 transition-opacity"
+                >
+                  Adi Bin Sheraz
+                </a>
+              </p>
+              <p className="text-[10px] text-[var(--muted)] opacity-50 mt-0.5">
+                All Rights Reserved.
+              </p>
+            </div>
           </div>
         </aside>
 
@@ -115,6 +132,18 @@ export function AdminShell({
             ))}
           </div>
           <main className="flex-1 px-4 py-6 sm:px-8">{children}</main>
+          <footer className="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-center sm:px-8">
+            <p className="text-[11px] text-[var(--muted)] opacity-60">
+              &copy; {new Date().getFullYear()}{" "}
+              <a
+                href="mailto:adi.binsheraz@gmail.com"
+                className="underline underline-offset-2 hover:opacity-100 transition-opacity"
+              >
+                Adi Bin Sheraz
+              </a>
+              {" - "} Kips College G-9 Attendance System. All Rights Reserved.
+            </p>
+          </footer>
         </div>
       </div>
     </div>

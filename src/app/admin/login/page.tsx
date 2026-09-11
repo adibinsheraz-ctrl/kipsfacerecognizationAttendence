@@ -1,9 +1,11 @@
+
 "use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui/primitives";
+import { analyticsIdentifyAdmin, analyticsEvent } from "@/lib/firebase";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -25,7 +27,20 @@ export default function AdminLoginPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Sign in failed");
+        await analyticsEvent("login_failed", {
+          reason: data.error || "unknown",
+          user_email: email,
+        });
         return;
+      }
+      // Identify admin in Firebase Analytics on successful login
+      if (data.admin) {
+        await analyticsIdentifyAdmin({
+          id: data.admin.id,
+          email: data.admin.email,
+          name: data.admin.name,
+          role: "admin",
+        });
       }
       router.push("/admin");
       router.refresh();

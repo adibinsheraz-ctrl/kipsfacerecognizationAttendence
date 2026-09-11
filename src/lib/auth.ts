@@ -1,5 +1,6 @@
 /**
- * © Kips College G-9 Face Recognition Attendance System.
+ * © 2024–2025 Adi Bin Sheraz — adi.binsheraz@gmail.com
+ * Kips College G-9 Face Recognition Attendance System.
  * Confidential & Proprietary. All Rights Reserved.
  * Unauthorized copying, distribution, or reverse engineering is strictly prohibited.
  */
