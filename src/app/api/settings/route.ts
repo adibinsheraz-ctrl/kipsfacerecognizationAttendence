@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET() {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
   return NextResponse.json({
     settings: settings || {

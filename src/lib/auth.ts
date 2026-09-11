@@ -53,7 +53,14 @@ export async function createSession(admin: { id: string; email: string; name: st
 
 export async function destroySession() {
   const jar = await cookies();
-  jar.set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+  jar.set(COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
 }
 
 export async function getSession() {

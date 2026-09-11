@@ -10,8 +10,11 @@ import {
   Settings,
   LogOut,
   ScanFace,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AppLockProvider, useAppLock } from "@/components/admin/AppLockGuard";
 
 const links = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -21,7 +24,7 @@ const links = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
-export function AdminShell({
+function AdminShellInner({
   children,
   adminName,
 }: {
@@ -30,11 +33,16 @@ export function AdminShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { lockApp } = useAppLock();
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/admin/login");
-    router.refresh();
+    try {
+      sessionStorage.clear();
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/admin/login");
+      router.refresh();
+    }
   }
 
   return (
@@ -42,13 +50,20 @@ export function AdminShell({
       <div className="mx-auto flex min-h-screen max-w-7xl">
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] px-4 py-6 md:flex">
           <div className="px-2">
-            <p className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--ink)]">
-              Kips College G-9
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">Attendance admin</p>
+            <div className="flex items-center justify-between">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--ink)]">
+                Kips College G-9
+              </p>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 border border-emerald-500/20">
+                <ShieldCheck size={11} /> Z++ SECURED
+              </span>
+              <p className="text-xs text-[var(--muted)]">Admin Console</p>
+            </div>
           </div>
 
-          <nav className="mt-8 flex flex-1 flex-col gap-1">
+          <nav className="mt-7 flex flex-1 flex-col gap-1">
             {links.map((link) => {
               const active =
                 pathname === link.href ||
@@ -73,6 +88,15 @@ export function AdminShell({
           </nav>
 
           <div className="mt-auto space-y-2 border-t border-[var(--border)] pt-4">
+            <button
+              onClick={lockApp}
+              className="flex w-full items-center gap-2.5 rounded-[10px] bg-amber-500/10 border border-amber-500/25 px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors font-medium"
+              title="Instantly lock the portal with security shield"
+            >
+              <Lock size={16} strokeWidth={2} />
+              Lock App Now
+            </button>
+
             <Link
               href="/kiosk"
               className="flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
@@ -110,10 +134,21 @@ export function AdminShell({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/80 px-4 py-3 backdrop-blur md:hidden">
-            <p className="font-[family-name:var(--font-display)] font-semibold">Kips Admin</p>
-            <button onClick={logout} className="text-sm text-[var(--muted)]">
-              Sign out
-            </button>
+            <div>
+              <p className="font-[family-name:var(--font-display)] font-semibold">Kips Admin</p>
+              <span className="text-[10px] font-bold text-emerald-600">Z++ SECURED</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={lockApp}
+                className="flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-600 border border-amber-500/25"
+              >
+                <Lock size={12} /> Lock
+              </button>
+              <button onClick={logout} className="text-sm text-[var(--muted)]">
+                Sign out
+              </button>
+            </div>
           </header>
           <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 md:hidden">
             {links.map((link) => (
@@ -147,5 +182,19 @@ export function AdminShell({
         </div>
       </div>
     </div>
+  );
+}
+
+export function AdminShell({
+  children,
+  adminName,
+}: {
+  children: React.ReactNode;
+  adminName: string;
+}) {
+  return (
+    <AppLockProvider adminName={adminName}>
+      <AdminShellInner adminName={adminName}>{children}</AdminShellInner>
+    </AppLockProvider>
   );
 }
